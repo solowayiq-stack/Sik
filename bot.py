@@ -1,3 +1,4 @@
+import os
 import time
 import threading
 from flask import Flask
@@ -9,7 +10,7 @@ ADMIN_ID = 8898807224
 
 bot = telebot.TeleBot(TOKEN)
 
-# ساخت یک وب‌سرور فیک برای گول زدن رندر
+# وب‌سرور برای راضی کردن پورت رندر
 app = Flask('')
 
 @app.route('/')
@@ -17,7 +18,9 @@ def home():
     return "Bot is active and running!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=8080)
+    # گرفتن پورت داینامیک اختصاصی از رندر
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 # دیکشنری‌ها برای ذخیره موقت وضعیت و اطلاعات کاربر
 user_states = {}
@@ -179,7 +182,7 @@ def admin_decision(call):
         bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption="❌ این رسید رد شد.")
 
 if __name__ == "__main__":
-    # استارت کردن وب‌سرور فیک در پس‌زمینه برای گول زدن رندر
+    # استارت کردن وب‌سرور در پس‌زمینه برای گول زدن رندر
     t = threading.Thread(target=run_flask)
     t.daemon = True
     t.start()
@@ -187,7 +190,7 @@ if __name__ == "__main__":
     # حلقه اصلی ربات تلگرام
     while True:
         try:
-            print("Bot is starting with Web Server wrapper...")
+            print("Bot is starting with dynamic port wrapper...")
             bot.infinity_polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"Error occurred: {e}")
