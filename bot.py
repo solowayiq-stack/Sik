@@ -1,11 +1,23 @@
 import time
+import threading
+from flask import Flask
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 TOKEN = '8949626248:AAGqNFnXWKYRiDmrLFoaklyGnDPItM6kBFo'
-ADMIN_ID = 8898807224  # آیدی عددی تو
+ADMIN_ID = 8898807224
 
 bot = telebot.TeleBot(TOKEN)
+
+# ساخت یک وب‌سرور فیک برای گول زدن رندر
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is active and running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
 
 # دیکشنری‌ها برای ذخیره موقت وضعیت و اطلاعات کاربر
 user_states = {}
@@ -166,11 +178,16 @@ def admin_decision(call):
         bot.answer_callback_query(call.id, "رسید رد شد.")
         bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption="❌ این رسید رد شد.")
 
-# حلقه اجرایی مقاوم برای رندر
 if __name__ == "__main__":
+    # استارت کردن وب‌سرور فیک در پس‌زمینه برای گول زدن رندر
+    t = threading.Thread(target=run_flask)
+    t.daemon = True
+    t.start()
+    
+    # حلقه اصلی ربات تلگرام
     while True:
         try:
-            print("Bot is starting...")
+            print("Bot is starting with Web Server wrapper...")
             bot.infinity_polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"Error occurred: {e}")
