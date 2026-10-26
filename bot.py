@@ -7,6 +7,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 TOKEN = '8949626248:AAGqNFnXWKYRiDmrLFoaklyGnDPItM6kBFo'
 ADMIN_ID = 8898807224
+DEFAULT_CARD = "6037701684660316"
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -18,7 +19,6 @@ def home():
     return "Bot is active and running!"
 
 def run_flask():
-    # گرفتن پورت داینامیک اختصاصی از رندر
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
@@ -71,7 +71,7 @@ def handle_text_steps(message):
             days = number
             
             markup = InlineKeyboardMarkup()
-            markup.row(InlineKeyboardButton("✍️ اعلام قیمت به کاربر", callback_data=f"setprice_{user_id}"))
+            markup.row(InlineKeyboardButton("✍️ اعلام قیمت و نام صاحب کارت", callback_data=f"setprice_{user_id}"))
             
             bot.send_message(
                 ADMIN_ID,
@@ -79,7 +79,7 @@ def handle_text_steps(message):
                 f"👤 کاربر: `{user_id}`\n"
                 f"📦 حجم: *{gb} گیگ*\n"
                 f"📅 مدت زمان: *{days} روز*\n\n"
-                f"لطفاً مبلغ رو محاسبه کن و به کاربر اعلام کن:",
+                f"لطفاً دکمه‌ی بالا رو بزن تا قیمت و نام صاحب کارت رو وارد کنی:",
                 reply_markup=markup,
                 parse_mode="Markdown"
             )
@@ -98,13 +98,16 @@ def ask_admin_for_price(call):
     bot.answer_callback_query(call.id)
     msg = bot.send_message(
         call.message.chat.id, 
-        f"مبلغ نهایی (به تومان) رو برای کاربر با آیدی `{user_id}` همینجا به صورت عدد بفرست:",
+        f"مبلغ و نام صاحب کارت رو به این شکل بفرست کاکو (اول مبلغ، بعد یک فاصله، بعد نام صاحب کارت):\nمثال:\n`370000 علی رضایی`",
         parse_mode="Markdown"
     )
     bot.register_next_step_handler(msg, send_price_to_user, user_id)
 
 def send_price_to_user(message, user_id):
-    price = message.text.strip()
+    parts = message.text.strip().split(maxsplit=1)
+    price = parts[0]
+    holder_name = parts[1] if len(parts) > 1 else "مدیریت"
+    
     target_user_id = int(user_id)
     
     user_data[target_user_id]['price'] = price
@@ -114,10 +117,12 @@ def send_price_to_user(message, user_id):
         target_user_id,
         f"💳 **فاکتور سفارش شما آماده شد!**\n\n"
         f"💰 مبلغ قابل پرداخت: *{price} تومان*\n\n"
+        f"💳 **شماره کارت مقصد:**\n`{DEFAULT_CARD}`\n"
+        f"👤 **به نام:** {holder_name}\n\n"
         f"لطفاً کارت به کارت کن و **عکس رسید واریزی** رو همینجا بفرست تا پس از تایید، کانفیگ‌ها برات ارسال بشن کاکو:",
         parse_mode="Markdown"
     )
-    bot.reply_to(message, f"✅ قیمت {price} تومان برای کاربر ارسال شد.")
+    bot.reply_to(message, f"✅ فاکتور شامل مبلغ {price} تومان و به نام «{holder_name}» برای کاربر ارسال شد.")
 
 @bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
@@ -182,15 +187,13 @@ def admin_decision(call):
         bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption="❌ این رسید رد شد.")
 
 if __name__ == "__main__":
-    # استارت کردن وب‌سرور در پس‌زمینه برای گول زدن رندر
     t = threading.Thread(target=run_flask)
     t.daemon = True
     t.start()
     
-    # حلقه اصلی ربات تلگرام
     while True:
         try:
-            print("Bot is starting with dynamic port wrapper...")
+            print("Bot is starting with dynamic card holder name...")
             bot.infinity_polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"Error occurred: {e}")
