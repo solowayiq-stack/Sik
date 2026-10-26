@@ -25,6 +25,7 @@ def run_flask():
 # دیکشنری‌ها برای ذخیره موقت وضعیت و اطلاعات کاربر
 user_states = {}
 user_data = {}
+admin_upload_sessions = {}
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -38,7 +39,7 @@ def send_welcome(message):
         "📦 لطفاً **حجم دلخواه** خود رو بین **۱۰ تا ۶۰۰ گیگابایت** به عدد بنویس (مثلاً: 50):"
     )
 
-@bot.message_handler(func=lambda message: message.from_user.id in user_states)
+@bot.message_handler(func=lambda message: message.from_user.id in user_states and message.from_user.id != ADMIN_ID)
 def handle_text_steps(message):
     user_id = message.from_user.id
     state = user_states[user_id]
@@ -98,7 +99,7 @@ def ask_admin_for_price(call):
     bot.answer_callback_query(call.id)
     msg = bot.send_message(
         call.message.chat.id, 
-        f"مبلغ و نام صاحب کارت رو به این شکل بفرست کاکو (اول مبلغ، بعد یک فاصله، بعد نام صاحب کارت):\nمثال:\n`370000 علی رضایی`",
+        f"مبلغ و نام صاحب کارت رو به این شکل بفرست کاکو (اول مبلغ، بعد یک فاصله، بعد نام صاحب کارت):\nمثال:\n`370000 محمد`",
         parse_mode="Markdown"
     )
     bot.register_next_step_handler(msg, send_price_to_user, user_id)
@@ -128,6 +129,14 @@ def send_price_to_user(message, user_id):
 def handle_receipt(message):
     user_id = message.from_user.id
     
+    if user_id == ADMIN_ID:
+        # اگر ادمین خودش توی چت عکس فرستاد و در حال آپلود فایل کانفیگ بود
+        if ADMIN_ID in admin_upload_sessions:
+            session = admin_upload_sessions[ADMIN_ID]
+            session['files'].append(('photo', message.photo[-1].file_id, message.caption))
+            bot.reply_to(message, f"📁 فایل/عکس کانفیگ اضافه شد. (تعداد کل: {len(session['files'])})\nاگر فایل دیگه‌ای نداری، دستور /done رو بفرست تا ارسال بشن.")
+        return
+        
     if user_states.get(user_id) != "waiting_for_receipt":
         bot.reply_to(message, "کاکو اول /start رو بزن و مراحل رو طی کن!")
         return
@@ -157,34 +166,85 @@ def handle_receipt(message):
     
     bot.reply_to(message, "⏳ رسید شما دریافت شد. در حال بررسی توسط مدیریت...")
 
+# هندلر برای دریافت فایل‌های سندی (Document) از طرف ادمین
+@bot.message_handler(content_types=['document'])
+def handle_admin_document(message):
+    if message.from_user.id == ADMIN_ID and ADMIN_ID in admin_upload_sessions:
+        session = admin_upload_sessions[ADMIN_ID]
+        session['files'].append(('document', message.document.file_id, message.caption))
+        bot.reply_to(message, f"📁 فایل کانفیگ دریافت شد. (تعداد کل: {len(session['files'])})\nبرای اتمام و ارسال به کاربر، دستور /done رو بفرست.")
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("accept_") or call.data.startswith("reject_"))
 def admin_decision(call):
     data = call.data
-    user_id = int(data.split("_")[1])
+    action, user_id_str = data.split("_")
+    user_id = int(user_id_str)
     
-    if data.startswith("accept_"):
-        turkey_config = "vless://turkey-config-link-here..."
-        germany_config = "vless://germany-config-link-here..."
-        
+    if action == "accept":
+        bot.answer_callback_query(call.id, "حالا فایل‌های کانفیگ رو بفرست.")
+        admin_upload_sessions[ADMIN_ID] = {
+            'target_user': user_id,
+            'files': [],
+            'msg_id': call.message.message_id
+        }
         bot.send_message(
-            user_id, 
-            f"🎉 **رسید شما تایید شد! ممنون از خریدتون کاکو.**\n\n"
-            f"این هم کانفیگ‌های اختصاصی شما (ترکیه و آلمان):\n\n"
-            f"🇹🇷 **کانفیگ ترکیه:**\n`{turkey_config}`\n\n"
-            f"🇩🇪 **کانفیگ آلمان:**\n`{germany_config}`", 
+            ADMIN_ID,
+            f"📥 **حالت آپلود فایل فعال شد!**\n\n"
+            f"الان هر چندتا فایل کانفیگ (سند یا عکس) که می‌خوای پشت سر هم برای کاربر با آیدی `{user_id}` بفرست.\n"
+            f"وقتی کار تموم شد، کافیه دستور `/done` رو بفرستی تا همه با هم برای کاربر ارسال بشن.",
             parse_mode="Markdown"
         )
         
-        user_states.pop(user_id, None)
-        user_data.pop(user_id, None)
-        
-        bot.answer_callback_query(call.id, "کانفیگ‌ها ارسال شدند.")
-        bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption="✅ رسید تایید شد و کانفیگ‌ها ارسال گردید.")
-        
-    elif data.startswith("reject_"):
+    elif action == "reject":
         bot.send_message(user_id, "❌ متأسفانه رسید واریزی شما تایید نشد کاکو. اگر مشکلی هست با پشتیبانی در ارتباط باش.")
         bot.answer_callback_query(call.id, "رسید رد شد.")
         bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption="❌ این رسید رد شد.")
+
+@bot.message_handler(commands=['done'])
+def finish_upload(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+        
+    if ADMIN_ID not in admin_upload_sessions:
+        bot.reply_to(message, "کاکو شما در حال حاضر در حین آپلود کانفیگ نیستی!")
+        return
+        
+    session = admin_upload_sessions[ADMIN_ID]
+    user_id = session['target_user']
+    files = session['files']
+    original_msg_id = session['msg_id']
+    
+    if not files:
+        bot.reply_to(message, "⚠️ هیچ فایلی ارسال نکودی کاکو! حداقل یک فایل بفرست یا با زدن /done لغو کن.")
+        return
+        
+    bot.send_message(
+        user_id, 
+        f"🎉 **رسید شما تایید شد! ممنون از خریدتون کاکو.**\n\n"
+        f"📁 **فایل‌های کانفیگ اختصاصی شما:**"
+    )
+    
+    # ارسال فایل‌ها به کاربر
+    for f_type, f_id, f_caption in files:
+        if f_type == 'document':
+            bot.send_document(user_id, f_id, caption=f_caption)
+        elif f_type == 'photo':
+            bot.send_photo(user_id, f_id, caption=f_caption)
+            
+    # پاکسازی وضعیت‌ها
+    user_states.pop(user_id, None)
+    user_data.pop(user_id, None)
+    admin_upload_sessions.pop(ADMIN_ID, None)
+    
+    bot.reply_to(message, "✅ تمامی فایل‌های کانفیگ با موفقیت برای کاربر ارسال شدند!")
+    try:
+        bot.edit_message_caption(
+            chat_id=ADMIN_ID, 
+            message_id=original_msg_id, 
+            caption="✅ رسید تایید شد و فایل‌های کانفیگ برای کاربر ارسال گردید."
+        )
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     t = threading.Thread(target=run_flask)
@@ -193,7 +253,7 @@ if __name__ == "__main__":
     
     while True:
         try:
-            print("Bot is starting with dynamic card holder name...")
+            print("Bot is starting with file upload support...")
             bot.infinity_polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"Error occurred: {e}")
