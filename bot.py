@@ -1,8 +1,9 @@
+import time
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 TOKEN = '8949626248:AAGqNFnXWKYRiDmrLFoaklyGnDPItM6kBFo'
-ADMIN_ID = 8898807224  # آیدی عددی تلگرام خودت (باید عدد باشه)
+ADMIN_ID = 8898807224  # آیدی عددی تو
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -165,4 +166,12 @@ def admin_decision(call):
         bot.answer_callback_query(call.id, "رسید رد شد.")
         bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption="❌ این رسید رد شد.")
 
-bot.infinity_polling()
+# حلقه اجرایی مقاوم برای رندر
+if __name__ == "__main__":
+    while True:
+        try:
+            print("Bot is starting...")
+            bot.infinity_polling(none_stop=True, interval=0, timeout=20)
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            time.sleep(5)
