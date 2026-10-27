@@ -42,7 +42,7 @@ def send_welcome(message):
 @bot.message_handler(func=lambda message: message.from_user.id in user_states and message.from_user.id != ADMIN_ID)
 def handle_text_steps(message):
     user_id = message.from_user.id
-    state = user_states[user_id]
+    state = user_states.get(user_id)
     text = message.text.strip()
     
     if not text.isdigit():
@@ -130,7 +130,6 @@ def handle_receipt(message):
     user_id = message.from_user.id
     
     if user_id == ADMIN_ID:
-        # اگر ادمین خودش توی چت عکس فرستاد و در حال آپلود فایل کانفیگ بود
         if ADMIN_ID in admin_upload_sessions:
             session = admin_upload_sessions[ADMIN_ID]
             session['files'].append(('photo', message.photo[-1].file_id, message.caption))
@@ -166,7 +165,6 @@ def handle_receipt(message):
     
     bot.reply_to(message, "⏳ رسید شما دریافت شد. در حال بررسی توسط مدیریت...")
 
-# هندلر برای دریافت فایل‌های سندی (Document) از طرف ادمین
 @bot.message_handler(content_types=['document'])
 def handle_admin_document(message):
     if message.from_user.id == ADMIN_ID and ADMIN_ID in admin_upload_sessions:
@@ -224,14 +222,12 @@ def finish_upload(message):
         f"📁 **فایل‌های کانفیگ اختصاصی شما:**"
     )
     
-    # ارسال فایل‌ها به کاربر
     for f_type, f_id, f_caption in files:
         if f_type == 'document':
             bot.send_document(user_id, f_id, caption=f_caption)
         elif f_type == 'photo':
             bot.send_photo(user_id, f_id, caption=f_caption)
             
-    # پاکسازی وضعیت‌ها
     user_states.pop(user_id, None)
     user_data.pop(user_id, None)
     admin_upload_sessions.pop(ADMIN_ID, None)
@@ -253,7 +249,7 @@ if __name__ == "__main__":
     
     while True:
         try:
-            print("Bot is starting with file upload support...")
+            print("Bot is starting clean without channel lock...")
             bot.infinity_polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
             print(f"Error occurred: {e}")
